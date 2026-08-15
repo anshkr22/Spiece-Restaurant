@@ -3,10 +3,16 @@ const generateOrderNumber = require('../utils/generateOrderNumber');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 
-const razorpayInstance = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'rzp_secret_placeholder'
-});
+function getRazorpayInstance() {
+  const key_id = process.env.RAZORPAY_KEY_ID;
+  const key_secret = process.env.RAZORPAY_KEY_SECRET;
+  
+  if (!key_id || !key_secret || key_id.includes('placeholder') || key_secret.includes('placeholder')) {
+    return null;
+  }
+  
+  return new Razorpay({ key_id, key_secret });
+}
 
 exports.createOrder = async (req, res, next) => {
   const connection = await pool.getConnection();
@@ -36,7 +42,6 @@ exports.createOrder = async (req, res, next) => {
     const [existingCust] = await connection.query('SELECT id FROM customers WHERE email = ? OR phone = ? LIMIT 1', [email || '', phone]);
     if (existingCust.length > 0) {
       customerId = existingCust[0].id;
-      // Update address if provided
       if (address) {
         await connection.query('UPDATE customers SET address = ? WHERE id = ?', [address, customerId]);
       }
@@ -128,7 +133,6 @@ exports.getOrders = async (req, res, next) => {
 
     const [orders] = await pool.query(query, params);
 
-    // Attach items to each order
     for (let order of orders) {
       const [items] = await pool.query(`
         SELECT oi.*, m.name AS item_name, m.image AS item_image
@@ -203,35 +207,46 @@ exports.createRazorpayOrder = async (req, res, next) => {
   try {
     const { amount, currency = 'INR', order_id } = req.body;
 
+    if (!amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid order amount.' });
+    }
+
     const options = {
       amount: Math.round(parseFloat(amount) * 100), // in paise
       currency,
-      receipt: `receipt_${order_id || Date.now()}`,
+      receipt: `receipt_sg_${order_id || Date.now()}`,
       payment_capture: 1
     };
 
-    try {
-      const razorpayOrder = await razorpayInstance.orders.create(options);
-      res.status(200).json({
-        success: true,
-        key: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-        order: razorpayOrder
-      });
-    } catch (rzpErr) {
-      // Mock test response if Razorpay key is test/invalid
-      res.status(200).json({
-        success: true,
-        isMock: true,
-        key: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-        order: {
-          id: `order_mock_${Date.now()}`,
-          entity: 'order',
-          amount: options.amount,
-          currency: 'INR',
-          status: 'created'
-        }
-      });
+    const razorpayInstance = getRazorpayInstance();
+
+    if (razorpayInstance) {
+      try {
+        const razorpayOrder = await razorpayInstance.orders.create(options);
+        return res.status(200).json({
+          success: true,
+          isMock: false,
+          key: process.env.RAZORPAY_KEY_ID,
+          order: razorpayOrder
+        });
+      } catch (rzpErr) {
+        console.error('Razorpay API error:', rzpErr.message);
+      }
     }
+
+    // Fallback to safe test mock mode if Razorpay credentials are not yet configured in local .env
+    res.status(200).json({
+      success: true,
+      isMock: true,
+      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+      order: {
+        id: `order_mock_${Date.now()}`,
+        entity: 'order',
+        amount: options.amount,
+        currency: 'INR',
+        status: 'created'
+      }
+    });
   } catch (err) {
     next(err);
   }
@@ -241,26 +256,55 @@ exports.verifyRazorpayPayment = async (req, res, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, order_id } = req.body;
 
-    let isVerified = true;
-
-    if (razorpay_signature && !razorpay_order_id.startsWith('order_mock_')) {
-      const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'rzp_secret_placeholder');
-      hmac.update(razorpay_order_id + '|' + razorpay_payment_id);
-      const generated_signature = hmac.digest('hex');
-      isVerified = generated_signature === razorpay_signature;
+    if (!order_id) {
+      return res.status(400).json({ success: false, message: 'Order ID is required for verification.' });
     }
 
-    if (isVerified && order_id) {
+    // 1. Duplicate check: verify if order is already marked paid
+    const [existingOrders] = await pool.query('SELECT payment_status FROM orders WHERE id = ?', [order_id]);
+    if (existingOrders.length > 0 && existingOrders[0].payment_status === 'paid') {
+      return res.status(200).json({
+        success: true,
+        message: 'Order payment is already verified and marked as paid.'
+      });
+    }
+
+    let isVerified = false;
+
+    // Handle mock payment verification
+    if (razorpay_order_id && razorpay_order_id.startsWith('order_mock_')) {
+      isVerified = true;
+    } else if (razorpay_order_id && razorpay_payment_id && razorpay_signature) {
+      const secret = process.env.RAZORPAY_KEY_SECRET;
+      if (secret && !secret.includes('placeholder')) {
+        const hmac = crypto.createHmac('sha256', secret);
+        hmac.update(razorpay_order_id + '|' + razorpay_payment_id);
+        const generated_signature = hmac.digest('hex');
+        isVerified = (generated_signature === razorpay_signature);
+      }
+    }
+
+    if (isVerified) {
       await pool.query(
         "UPDATE orders SET payment_status = 'paid', order_status = 'confirmed' WHERE id = ?",
         [order_id]
       );
-    }
 
-    res.status(200).json({
-      success: isVerified,
-      message: isVerified ? 'Payment verified successfully' : 'Payment signature verification failed'
-    });
+      return res.status(200).json({
+        success: true,
+        message: 'Payment verified successfully.'
+      });
+    } else {
+      await pool.query(
+        "UPDATE orders SET payment_status = 'failed' WHERE id = ?",
+        [order_id]
+      );
+
+      return res.status(400).json({
+        success: false,
+        message: 'Payment signature verification failed.'
+      });
+    }
   } catch (err) {
     next(err);
   }

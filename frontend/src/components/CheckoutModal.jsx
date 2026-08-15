@@ -57,7 +57,7 @@ const CheckoutModal = ({ isOpen, onClose, cartItems, onOrderSuccess }) => {
           const rzpRes = await createRazorpayOrder(total, createdOrder.id);
           const { key, order: rzpOrder, isMock } = rzpRes.data;
 
-          if (window.Razorpay && !isMock) {
+          if (window.Razorpay && !isMock && key && !key.includes('placeholder')) {
             const options = {
               key,
               amount: rzpOrder.amount,
@@ -67,13 +67,27 @@ const CheckoutModal = ({ isOpen, onClose, cartItems, onOrderSuccess }) => {
               image: "https://images.unsplash.com/photo-1603072245870-5ca87af7a814?auto=format&fit=crop&w=300&q=80",
               order_id: rzpOrder.id,
               handler: async function (response) {
-                await verifyRazorpayPayment({
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                  order_id: createdOrder.id
-                });
-                onOrderSuccess({ ...createdOrder, payment_status: 'paid', order_status: 'confirmed' });
+                try {
+                  const verifyRes = await verifyRazorpayPayment({
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                    order_id: createdOrder.id
+                  });
+
+                  if (verifyRes.data && verifyRes.data.success) {
+                    onOrderSuccess({ ...createdOrder, payment_status: 'paid', order_status: 'confirmed' });
+                  } else {
+                    setError('Payment verification failed. Signature mismatched.');
+                  }
+                } catch (vErr) {
+                  setError('Payment signature verification error. Please contact support.');
+                }
+              },
+              modal: {
+                ondismiss: function () {
+                  setError(`Payment window closed. Order #${createdOrder.order_number} is pending. You can retry payment or choose Cash on Delivery.`);
+                }
               },
               prefill: {
                 name: form.name,
@@ -84,9 +98,12 @@ const CheckoutModal = ({ isOpen, onClose, cartItems, onOrderSuccess }) => {
             };
 
             const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (resp) {
+              setError(`Payment Failed: ${resp.error?.description || 'Transaction declined.'}`);
+            });
             rzp.open();
           } else {
-            // Razorpay test fallback
+            // Test Mode Fallback Simulation (when local .env key is not set or mock mode)
             await verifyRazorpayPayment({
               razorpay_order_id: rzpOrder.id,
               razorpay_payment_id: `pay_test_${Date.now()}`,
@@ -96,7 +113,7 @@ const CheckoutModal = ({ isOpen, onClose, cartItems, onOrderSuccess }) => {
             onOrderSuccess({ ...createdOrder, payment_status: 'paid', order_status: 'confirmed' });
           }
         } catch (rzpErr) {
-          console.warn('Razorpay test mode proceeding with confirmed order');
+          setError('Could not initialize Razorpay checkout. Proceeding with order as pending.');
           onOrderSuccess(createdOrder);
         }
       } else {
