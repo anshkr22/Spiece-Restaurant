@@ -1,2 +1,2 @@
 # Spiece-Restaurant
-Spice Garden Restaurant — A modern full-stack restaurant website with an interactive menu, online ordering, table reservations, shopping cart, authentication, and Razorpay-ready payments.
+Spice Garden Restaurant is a modern, responsive full-stack restaurant web application designed to provide customers with a seamless online dining experience. The platform includes an interactive food menu, cart and checkout system, table reservations, user authentication, online ordering, and payment integration. Built with a clean and responsive UI for an engaging experience across desktop and mobile devices.
