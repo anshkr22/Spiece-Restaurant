@@ -1,6 +1,6 @@
 # 🌶️ Spice Garden Restaurant - Full-Stack Website
 
-A real, production-ready full-stack restaurant website built for **Spice Garden Restaurant** ("Good Food | Good Mood"). Built with React + JSX on the frontend, Node.js + Express.js on the backend, and connected directly to the existing MySQL database (`spice_garden`).
+Spice Garden Restaurant is a modern, responsive full-stack restaurant web application designed to provide customers with a seamless online dining experience. The platform includes an interactive food menu, cart and checkout system, table reservations, user authentication, online ordering, and payment integration. Built with React + JSX on the frontend, Node.js + Express.js on the backend, and connected directly to a MySQL database (`spice_garden`).
 
 ---
 
@@ -40,7 +40,6 @@ A real, production-ready full-stack restaurant website built for **Spice Garden 
 
 ```
 spiece resturant/
-├── .env                  # Environment variables (MySQL password, JWT secret, Razorpay keys)
 ├── .env.example          # Template environment file
 ├── README.md             # Project documentation & guide
 ├── package.json          # Root scripts to run frontend and backend
@@ -141,3 +140,4 @@ To access the Admin Dashboard:
 | `GET` | `/api/reviews` | Fetch approved customer reviews | Public |
 | `POST` | `/api/reviews` | Submit new customer review | Public |
 | `GET` | `/api/analytics/dashboard` | Fetch live MySQL metrics | Admin |
+
