@@ -15,6 +15,7 @@ import FloatingButtons from './components/FloatingButtons';
 
 import AdminLogin from './admin/AdminLogin';
 import AdminDashboard from './admin/AdminDashboard';
+import { fetchMe } from './services/api';
 
 function App() {
   const [view, setView] = useState('customer'); // 'customer', 'admin_login', 'admin_dashboard'
@@ -40,11 +41,24 @@ function App() {
     const user = localStorage.getItem('spice_user');
     if (token && user) {
       setAdminUser(JSON.parse(user));
+      // Validate token with backend
+      fetchMe()
+        .then((res) => {
+          if (res.data && res.data.success) {
+            setAdminUser(res.data.user);
+          } else {
+            handleLogout();
+          }
+        })
+        .catch(() => {
+          handleLogout();
+        });
     }
 
     const checkHash = () => {
+      const activeToken = localStorage.getItem('spice_token');
       if (window.location.hash === '#admin' || window.location.pathname.includes('/admin')) {
-        if (token && user) setView('admin_dashboard');
+        if (activeToken) setView('admin_dashboard');
         else setView('admin_login');
       }
     };
@@ -53,6 +67,15 @@ function App() {
     window.addEventListener('hashchange', checkHash);
     return () => window.removeEventListener('hashchange', checkHash);
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('spice_token');
+    localStorage.removeItem('spice_user');
+    setAdminUser(null);
+    if (window.location.hash === '#admin' || window.location.pathname.includes('/admin')) {
+      setView('admin_login');
+    }
+  };
 
   const showToast = (msg) => {
     setToastMessage(msg);

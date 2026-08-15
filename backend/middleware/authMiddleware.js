@@ -6,9 +6,13 @@ const verifyToken = (req, res, next) => {
     return res.status(401).json({ success: false, message: 'Access denied. Token missing.' });
   }
 
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ success: false, message: 'Server configuration error: JWT_SECRET missing.' });
+  }
+
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_jwt_secret_change_in_env');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (err) {

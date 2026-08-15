@@ -121,9 +121,8 @@ npm run dev
 ## 🔑 Admin Login Credentials
 
 To access the Admin Dashboard:
-1. Click **Admin Demo** button on the navbar or navigate to `/admin/login` inside the app.
-2. Email: Configure your admin email locally.
-3. Password: Configure your admin password securely.
+1. Click **Admin Login** button on the navbar or navigate to `/admin/login` inside the app.
+2. Configure the required credentials securely in the local `.env` file.
 
 ---
 

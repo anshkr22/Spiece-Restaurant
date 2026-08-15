@@ -21,21 +21,19 @@ exports.login = async (req, res, next) => {
     // Verify password with bcrypt
     const isMatch = await bcrypt.compare(password, user.password);
 
-    // If password doesn't match hash directly, check if plain text matches (for legacy/dev fallback) or standard admin password
-    let validPassword = isMatch;
-    if (!validPassword && user.password === password) {
-      validPassword = true;
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
     }
 
-    if (!validPassword) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ success: false, message: 'Server configuration error: JWT_SECRET missing.' });
     }
 
     // Generate JWT token
     const token = jwt.sign(
       { id: user.id, name: user.name, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'default_jwt_secret_change_in_env',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE || process.env.JWT_EXPIRES_IN || '7d' }
     );
 
     res.status(200).json({

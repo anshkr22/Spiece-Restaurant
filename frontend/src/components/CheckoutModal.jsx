@@ -28,7 +28,7 @@ const CheckoutModal = ({ isOpen, onClose, cartItems, onOrderSuccess }) => {
     setError('');
 
     try {
-      // 1. Create order in MySQL database via Express API
+      // 1. Create order in MySQL database via Express API (backend calculates prices)
       const orderPayload = {
         name: form.name,
         phone: form.phone,
@@ -36,11 +36,7 @@ const CheckoutModal = ({ isOpen, onClose, cartItems, onOrderSuccess }) => {
         address: form.address,
         order_type: form.order_type,
         payment_method: form.payment_method,
-        items: cartItems,
-        subtotal,
-        tax,
-        delivery_fee: deliveryFee,
-        total_amount: total
+        items: cartItems.map(item => ({ id: item.id, quantity: item.quantity }))
       };
 
       const res = await createOrder(orderPayload);
@@ -54,7 +50,7 @@ const CheckoutModal = ({ isOpen, onClose, cartItems, onOrderSuccess }) => {
       // 2. If Payment Method is Online Payment (Razorpay Test Mode)
       if (form.payment_method === 'online_payment') {
         try {
-          const rzpRes = await createRazorpayOrder(total, createdOrder.id);
+          const rzpRes = await createRazorpayOrder(createdOrder.total_amount, createdOrder.id);
           const { key, order: rzpOrder, isMock } = rzpRes.data;
 
           if (window.Razorpay && !isMock && key && !key.includes('placeholder')) {
@@ -86,7 +82,7 @@ const CheckoutModal = ({ isOpen, onClose, cartItems, onOrderSuccess }) => {
               },
               modal: {
                 ondismiss: function () {
-                  setError(`Payment window closed. Order #${createdOrder.order_number} is pending. You can retry payment or choose Cash on Delivery.`);
+                  setError(`Payment window closed. Order #${createdOrder.order_number} is pending.`);
                 }
               },
               prefill: {
@@ -102,19 +98,24 @@ const CheckoutModal = ({ isOpen, onClose, cartItems, onOrderSuccess }) => {
               setError(`Payment Failed: ${resp.error?.description || 'Transaction declined.'}`);
             });
             rzp.open();
-          } else {
-            // Test Mode Fallback Simulation (when local .env key is not set or mock mode)
-            await verifyRazorpayPayment({
+          } else if (isMock) {
+            // Test Mode Fallback Simulation (allowed ONLY when PAYMENT_MOCK_MODE=true on backend)
+            const verifyRes = await verifyRazorpayPayment({
               razorpay_order_id: rzpOrder.id,
               razorpay_payment_id: `pay_test_${Date.now()}`,
               razorpay_signature: 'test_signature',
               order_id: createdOrder.id
             });
-            onOrderSuccess({ ...createdOrder, payment_status: 'paid', order_status: 'confirmed' });
+            if (verifyRes.data && verifyRes.data.success) {
+              onOrderSuccess({ ...createdOrder, payment_status: 'paid', order_status: 'confirmed' });
+            } else {
+              setError('Development mock payment verification rejected by backend.');
+            }
+          } else {
+            setError('Online payment system is not available. Please choose Cash on Delivery.');
           }
         } catch (rzpErr) {
-          setError('Could not initialize Razorpay checkout. Proceeding with order as pending.');
-          onOrderSuccess(createdOrder);
+          setError(rzpErr.response?.data?.message || 'Could not initialize Razorpay checkout.');
         }
       } else {
         // Cash on delivery

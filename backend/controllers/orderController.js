@@ -26,16 +26,69 @@ exports.createOrder = async (req, res, next) => {
       address,
       order_type, // 'delivery', 'pickup', 'dine_in'
       payment_method, // 'cash_on_delivery', 'online_payment'
-      items, // array of { id, name, price, quantity }
-      subtotal,
-      tax,
-      delivery_fee,
-      total_amount
+      items // array of { id, quantity }
     } = req.body;
 
-    if (!name || !phone || !items || items.length === 0) {
+    if (!name || !phone || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: 'Please provide customer name, phone, and order items.' });
     }
+
+    // Validate item format and quantities
+    const formattedItems = [];
+    for (const item of items) {
+      const itemId = parseInt(item.id || item.menu_item_id, 10);
+      const quantity = parseInt(item.quantity, 10);
+
+      if (isNaN(itemId) || itemId <= 0) {
+        return res.status(400).json({ success: false, message: 'Invalid item ID in order.' });
+      }
+      if (isNaN(quantity) || quantity <= 0 || quantity > 100) {
+        return res.status(400).json({ success: false, message: 'Item quantity must be a positive integer (max 100).' });
+      }
+      formattedItems.push({ id: itemId, quantity });
+    }
+
+    // Fetch authoritative dish prices directly from MySQL menu_items
+    const itemIds = formattedItems.map(i => i.id);
+    const [dbItems] = await connection.query(
+      'SELECT id, name, price FROM menu_items WHERE id IN (?)',
+      [itemIds]
+    );
+
+    if (dbItems.length !== new Set(itemIds).size) {
+      return res.status(400).json({ success: false, message: 'One or more items in your order do not exist.' });
+    }
+
+    const itemMap = new Map(dbItems.map(i => [i.id, i]));
+
+    // Calculate subtotal on backend
+    let subtotal = 0;
+    const validatedOrderItems = [];
+
+    for (const item of formattedItems) {
+      const dbItem = itemMap.get(item.id);
+      const price = parseFloat(dbItem.price);
+      const itemSubtotal = parseFloat((price * item.quantity).toFixed(2));
+      subtotal += itemSubtotal;
+
+      validatedOrderItems.push({
+        menu_item_id: dbItem.id,
+        quantity: item.quantity,
+        price: price,
+        subtotal: itemSubtotal
+      });
+    }
+
+    subtotal = parseFloat(subtotal.toFixed(2));
+
+    // Calculate tax (5% GST)
+    const tax = parseFloat((subtotal * 0.05).toFixed(2));
+
+    // Calculate delivery fee (₹40 for delivery, ₹0 for pickup/dine_in)
+    const delivery_fee = (order_type === 'delivery') ? 40.00 : 0.00;
+
+    // Calculate total amount
+    const total_amount = parseFloat((subtotal + tax + delivery_fee).toFixed(2));
 
     // 1. Find or create customer in customers table
     let customerId;
@@ -56,7 +109,7 @@ exports.createOrder = async (req, res, next) => {
     // 2. Generate unique order number
     const orderNumber = generateOrderNumber();
 
-    // 3. Insert order
+    // 3. Insert order using ONLY server-calculated totals
     const [orderResult] = await connection.query(
       `INSERT INTO orders (
         order_number, customer_id, subtotal, tax, delivery_fee, total_amount,
@@ -65,10 +118,10 @@ exports.createOrder = async (req, res, next) => {
       [
         orderNumber,
         customerId,
-        subtotal || 0,
-        tax || 0,
-        delivery_fee || 0,
-        total_amount || 0,
+        subtotal,
+        tax,
+        delivery_fee,
+        total_amount,
         order_type || 'delivery',
         address || 'Dine-in / Pickup',
         payment_method || 'cash_on_delivery'
@@ -77,12 +130,11 @@ exports.createOrder = async (req, res, next) => {
 
     const orderId = orderResult.insertId;
 
-    // 4. Insert order items
-    for (const item of items) {
-      const itemSubtotal = (parseFloat(item.price) * parseInt(item.quantity, 10)).toFixed(2);
+    // 4. Insert order items using server-calculated prices
+    for (const item of validatedOrderItems) {
       await connection.query(
         'INSERT INTO order_items (order_id, menu_item_id, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?)',
-        [orderId, item.id, item.quantity, item.price, itemSubtotal]
+        [orderId, item.menu_item_id, item.quantity, item.price, item.subtotal]
       );
     }
 
@@ -205,14 +257,26 @@ exports.updateOrderStatus = async (req, res, next) => {
 
 exports.createRazorpayOrder = async (req, res, next) => {
   try {
-    const { amount, currency = 'INR', order_id } = req.body;
+    const { order_id, amount: clientAmount, currency = 'INR' } = req.body;
+    let finalAmount;
 
-    if (!amount || isNaN(amount) || amount <= 0) {
-      return res.status(400).json({ success: false, message: 'Invalid order amount.' });
+    if (order_id) {
+      const [dbOrders] = await pool.query('SELECT total_amount, payment_status FROM orders WHERE id = ?', [order_id]);
+      if (dbOrders.length === 0) {
+        return res.status(404).json({ success: false, message: 'Order not found.' });
+      }
+      if (dbOrders[0].payment_status === 'paid') {
+        return res.status(400).json({ success: false, message: 'Order is already paid.' });
+      }
+      finalAmount = parseFloat(dbOrders[0].total_amount);
+    } else if (clientAmount && !isNaN(clientAmount) && clientAmount > 0) {
+      finalAmount = parseFloat(clientAmount);
+    } else {
+      return res.status(400).json({ success: false, message: 'Valid order_id or amount is required.' });
     }
 
     const options = {
-      amount: Math.round(parseFloat(amount) * 100), // in paise
+      amount: Math.round(finalAmount * 100), // in paise
       currency,
       receipt: `receipt_sg_${order_id || Date.now()}`,
       payment_capture: 1
@@ -234,18 +298,27 @@ exports.createRazorpayOrder = async (req, res, next) => {
       }
     }
 
-    // Fallback to safe test mock mode if Razorpay credentials are not yet configured in local .env
-    res.status(200).json({
-      success: true,
-      isMock: true,
-      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-      order: {
-        id: `order_mock_${Date.now()}`,
-        entity: 'order',
-        amount: options.amount,
-        currency: 'INR',
-        status: 'created'
-      }
+    // Check if development mock mode is explicitly enabled
+    const isMockAllowed = process.env.PAYMENT_MOCK_MODE === 'true';
+
+    if (isMockAllowed) {
+      return res.status(200).json({
+        success: true,
+        isMock: true,
+        key: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+        order: {
+          id: `order_mock_${Date.now()}`,
+          entity: 'order',
+          amount: options.amount,
+          currency: 'INR',
+          status: 'created'
+        }
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: 'Online payment gateway is not configured on the server.'
     });
   } catch (err) {
     next(err);
@@ -269,11 +342,14 @@ exports.verifyRazorpayPayment = async (req, res, next) => {
       });
     }
 
+    const isMockAllowed = process.env.PAYMENT_MOCK_MODE === 'true';
     let isVerified = false;
 
-    // Handle mock payment verification
+    // Handle mock payment verification (ONLY if PAYMENT_MOCK_MODE === 'true')
     if (razorpay_order_id && razorpay_order_id.startsWith('order_mock_')) {
-      isVerified = true;
+      if (isMockAllowed) {
+        isVerified = true;
+      }
     } else if (razorpay_order_id && razorpay_payment_id && razorpay_signature) {
       const secret = process.env.RAZORPAY_KEY_SECRET;
       if (secret && !secret.includes('placeholder')) {

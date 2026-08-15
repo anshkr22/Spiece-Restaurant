@@ -21,15 +21,7 @@ const AdminLogin = ({ onLoginSuccess, onBackToSite }) => {
         onLoginSuccess(res.data.user);
       }
     } catch (err) {
-      // Fallback demo admin login
-      if (email === 'admin@spicegarden.com') {
-        const demoUser = { id: 1, name: 'Admin User', email, role: 'admin' };
-        localStorage.setItem('spice_token', 'demo_jwt_token_spice_garden');
-        localStorage.setItem('spice_user', JSON.stringify(demoUser));
-        onLoginSuccess(demoUser);
-      } else {
-        setError(err.response?.data?.message || 'Invalid admin credentials');
-      }
+      setError(err.response?.data?.message || 'Invalid admin credentials');
     } finally {
       setLoading(false);
     }
