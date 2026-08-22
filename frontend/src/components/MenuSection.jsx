@@ -102,11 +102,13 @@ const MenuSection = ({ onAddToCart }) => {
                       src={dishImg} 
                       alt={dish.name} 
                       className="menu-card-img"
+                      loading="lazy"
                       onError={(e) => {
                         const key = (dish.name || '').toLowerCase();
                         e.target.src = dishFallbackImages[key] || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80';
                       }}
                     />
+
                     <div className="rating-tag">
                       <Star size={12} fill="#FFB300" color="#FFB300" />
                       <span>{dish.rating || '4.8'}</span>

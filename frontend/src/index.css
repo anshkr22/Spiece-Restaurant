@@ -1737,3 +1737,84 @@ h1, h2, h3, h4, h5, h6 {
     height: 480px;
   }
 }
+
+/* --- Hero Banner Carousel & Animations --- */
+.hero-controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.slider-arrow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  color: var(--text-dark);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.25s ease;
+}
+
+.slider-arrow-btn:hover {
+  background: var(--primary);
+  color: #FFFFFF;
+  border-color: var(--primary);
+  transform: scale(1.08);
+}
+
+.hero-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dot-pill {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.2);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.dot-pill.active {
+  width: 28px;
+  border-radius: 12px;
+  background: var(--primary);
+}
+
+.fade-in-key {
+  animation: fadeInText 0.5s ease-in-out forwards;
+}
+
+.fade-in-img {
+  animation: fadeInImage 0.6s ease-in-out forwards;
+}
+
+@keyframes fadeInText {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInImage {
+  from {
+    opacity: 0.3;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
