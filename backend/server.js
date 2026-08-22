@@ -15,6 +15,7 @@ const customerRoutes = require('./routes/customerRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const chatbotRoutes = require('./routes/chatbotRoutes');
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/chatbot', chatbotRoutes);
 
 // Error Handling Middleware
 app.use(notFound);

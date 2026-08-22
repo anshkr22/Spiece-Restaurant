@@ -11,7 +11,7 @@ import CartDrawer from './components/CartDrawer';
 import CheckoutModal from './components/CheckoutModal';
 import OrderConfirmationModal from './components/OrderConfirmationModal';
 import Footer from './components/Footer';
-import FloatingButtons from './components/FloatingButtons';
+import Chatbot from './components/Chatbot';
 
 import AdminLogin from './admin/AdminLogin';
 import AdminDashboard from './admin/AdminDashboard';
@@ -211,8 +211,18 @@ function App() {
         else setView('admin_login');
       }} />
 
-      {/* Floating Action Buttons */}
-      <FloatingButtons />
+      {/* Floating Spice Garden Chatbot */}
+      <Chatbot 
+        cartItems={cartItems}
+        onAddToCart={handleAddToCart}
+        onUpdateQuantity={handleUpdateQuantity}
+        onRemoveItem={handleRemoveItem}
+        onOpenCheckout={() => {
+          setCartOpen(false);
+          setCheckoutOpen(true);
+        }}
+        onOpenCart={() => setCartOpen(true)}
+      />
 
       {/* Cart Drawer */}
       <CartDrawer 

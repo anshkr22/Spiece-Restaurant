@@ -50,6 +50,9 @@ export const createOrder = (orderData) =>
 export const fetchOrders = (status = 'all') => 
   api.get('/orders', { params: { status } });
 
+export const fetchOrderById = (id) => 
+  api.get(`/orders/${id}`);
+
 export const updateOrderStatus = (id, order_status, payment_status) => 
   api.put(`/orders/${id}/status`, { order_status, payment_status });
 
@@ -113,4 +116,9 @@ export const fetchDashboardMetrics = () =>
 export const fetchPopularItems = () => 
   api.get('/analytics/popular-items');
 
+// Chatbot AI Assistant
+export const askChatbotAI = (message, history = []) => 
+  api.post('/chatbot/chat', { message, history });
+
 export default api;
+
