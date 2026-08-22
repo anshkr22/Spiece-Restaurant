@@ -2,24 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Star, ShoppingBag, Utensils } from 'lucide-react';
 import { fetchMenuItems, fetchCategories } from '../services/api';
 
-const dishFallbackImages = {
-  'paneer tikka': 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=900&q=80',
-  'chicken biryani': 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=900&q=80',
-  'mutton biryani': 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=900&q=80',
-  'butter chicken': 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?auto=format&fit=crop&w=900&q=80',
-  'veg manchurian': 'https://images.unsplash.com/photo-1541832676-9b763b0239ab?auto=format&fit=crop&w=900&q=80',
-  'masala dosa': 'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?auto=format&fit=crop&w=900&q=80',
-  'gulab jamun': 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=80',
-  'mango lassi': 'https://images.unsplash.com/photo-1571006682858-a45752990da5?auto=format&fit=crop&w=900&q=80'
-};
+const DEFAULT_FOOD_IMAGE = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80';
 
 const getDishImage = (dish) => {
-  if (dish.image && dish.image.startsWith('http')) {
-    return dish.image;
+  if (dish && dish.image && typeof dish.image === 'string' && dish.image.trim().startsWith('http')) {
+    return dish.image.trim();
   }
-  const key = (dish.name || '').toLowerCase();
-  return dishFallbackImages[key] || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80';
+  return DEFAULT_FOOD_IMAGE;
 };
+
 
 const MenuSection = ({ onAddToCart }) => {
   const [categories, setCategories] = useState([]);
@@ -104,9 +95,9 @@ const MenuSection = ({ onAddToCart }) => {
                       className="menu-card-img"
                       loading="lazy"
                       onError={(e) => {
-                        const key = (dish.name || '').toLowerCase();
-                        e.target.src = dishFallbackImages[key] || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80';
+                        e.target.src = DEFAULT_FOOD_IMAGE;
                       }}
+
                     />
 
                     <div className="rating-tag">
